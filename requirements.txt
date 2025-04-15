@@ -1,0 +1,5 @@
+plotly.express
+simple-salesforce
+pandas
+python-dotenv
+streamlit>=1.22.0
