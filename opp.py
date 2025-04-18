@@ -3,8 +3,10 @@ from simple_salesforce import Salesforce
 import os
 from dotenv import load_dotenv
 import plotly.express as px
+import plotly.graph_objects as go
 import pandas as pd
 import datetime
+import numpy as np
 
 # Load environment variables from .env file
 load_dotenv()
@@ -132,7 +134,7 @@ def get_producer_names(sf, producer_ids):
         mapping[pid] = full_name
     return mapping
 
-def connect_sf_and_query(start_date, end_date):
+def connect_sf_and_query(start_date, end_date, new_business_only):
     """
     Uses an authenticated Salesforce connection (stored in st.session_state.sf)
     to run three sets of queries:
@@ -149,11 +151,17 @@ def connect_sf_and_query(start_date, end_date):
         end_date_str = end_date.strftime('%Y-%m-%dT23:59:59Z')
         date_filter = f"CreatedDate >= {start_date_str} AND CreatedDate <= {end_date_str}"
         
+        # Add New Business filter if checkbox is selected
+        if new_business_only:
+            new_business_filter = "AND New_Business_or_Renewal__c IN ('Personal Lines - New Business', 'Commercial Lines - New Business')"
+        else:
+            new_business_filter = ""
+        
         # Query 1: Overall aggregation by Type.
         type_query = f"""
             SELECT Type, COUNT(Id) oppCount
             FROM Opportunity
-            WHERE {date_filter}
+            WHERE {date_filter} {new_business_filter}
             GROUP BY Type
         """
         type_results = sf.query_all(type_query)
@@ -173,7 +181,7 @@ def connect_sf_and_query(start_date, end_date):
         query_with_producer = f"""
             SELECT Producer__c, Type, COUNT(Id) oppCount
             FROM Opportunity
-            WHERE {date_filter} AND Producer__c != null
+            WHERE {date_filter} {new_business_filter} AND Producer__c != null
             GROUP BY Producer__c, Type
         """
         results_with_prod = sf.query_all(query_with_producer)
@@ -182,7 +190,7 @@ def connect_sf_and_query(start_date, end_date):
         query_without_producer = f"""
             SELECT Owner.Name, Type, COUNT(Id) oppCount
             FROM Opportunity
-            WHERE {date_filter} AND Producer__c = null
+            WHERE {date_filter} {new_business_filter} AND Producer__c = null
             GROUP BY Owner.Name, Type
         """
         results_without_prod = sf.query_all(query_without_producer)
@@ -232,14 +240,18 @@ def connect_sf_and_query(start_date, end_date):
 
 st.title("Opportunity Analysis Dashboard")
 
-# Sidebar: Date Range Selection
-st.sidebar.header("Dashboard Options - Date Range")
+# Sidebar: Date Range Selection and New Business Filter
+st.sidebar.header("Dashboard Options")
 today = datetime.date.today()
 start_date = st.sidebar.date_input("Start Date", today - datetime.timedelta(days=30))
 end_date = st.sidebar.date_input("End Date", today)
 
+# Add checkbox for New Business filter
+new_business_only = st.sidebar.checkbox("New Business Only", value=False, 
+                                       help="Filter for 'Personal Lines - New Business' and 'Commercial Lines - New Business'")
+
 # Retrieve data using the authenticated Salesforce connection.
-lob_df, producer_df = connect_sf_and_query(start_date, end_date)
+lob_df, producer_df = connect_sf_and_query(start_date, end_date, new_business_only)
 
 # Visualization 1: Overall LOB distribution.
 st.subheader("Opportunities by Line of Business Category")
