@@ -238,7 +238,7 @@ def connect_sf_and_query(start_date, end_date, new_business_only):
 # Streamlit UI for Date Selection and Visualizations
 # ==============================================================================
 
-st.title("Policy Analysis Dashboard")
+st.title("Opportunity Analysis Dashboard")
 
 # Sidebar: Date Range Selection and New Business Filter
 st.sidebar.header("Dashboard Options")
@@ -253,39 +253,63 @@ new_business_only = st.sidebar.checkbox("New Business Only", value=False,
 # Retrieve data using the authenticated Salesforce connection.
 lob_df, producer_df = connect_sf_and_query(start_date, end_date, new_business_only)
 
-# Visualization 1: Overall LOB distribution.
-st.subheader("Policies by Line of Business Category")
+# Display Total Opportunities
+st.subheader("Total Opportunities Summary")
 if not lob_df.empty:
+    # Calculate total opportunities
+    total_opps = lob_df['Count'].sum()
+    st.metric("Total Opportunities", total_opps)
+
+    # Visualization 1: Overall LOB distribution.
+    st.subheader("Pie Chart: Opportunities by Line of Business Category")
     grouped_lob = lob_df.groupby("LOB_Category")["Count"].sum().reset_index()
+    grouped_lob = grouped_lob.sort_values("Count", ascending=False)
     fig_lob = px.pie(
         grouped_lob,
         names="LOB_Category",
         values="Count",
-        title="Policy Distribution by LOB Category"
+        title="Opportunity Distribution by LOB Category"
     )
     st.plotly_chart(fig_lob)
+
+    # Visualization 2: Opportunities per Producer by LOB.
+    st.subheader("Bar Chart: Opportunities per Producer by LOB")
+    if not producer_df.empty:
+        # Detailed Producer Breakdown
+        grouped_producer = producer_df.groupby(["Producer", "LOB_Category"])["Count"].sum().reset_index()
+        grouped_producer = grouped_producer.sort_values("Count", ascending=False)
+        
+        # Bar Chart of Producers
+        fig_prod = px.bar(
+            grouped_producer,
+            x="Producer",
+            y="Count",
+            color="LOB_Category",
+            barmode="group",
+            title="Opportunities per Producer by LOB"
+        )
+        st.plotly_chart(fig_prod)
+    else:
+        st.info("No producer data available for the selected date range.")
+
+    # Detailed Breakdown Sections AFTER Visualizations
+    st.subheader("Opportunities by Line of Business (LOB) Category")
     st.dataframe(grouped_lob)
+    
+    # Detailed Breakdown by Original Type
+    st.subheader("Opportunities by Original Type")
+    type_breakdown = lob_df.groupby("Type")["Count"].sum().reset_index()
+    type_breakdown = type_breakdown.sort_values("Count", ascending=False)
+    st.dataframe(type_breakdown)
 else:
     st.info("No Line of Business data available for the selected date range.")
 
-# Visualization 2: Policies per Producer by LOB.
-st.subheader("Policies per Producer by LOB Category")
+# Detailed Producer Breakdown after Visualizations
 if not producer_df.empty:
-    grouped_producer = producer_df.groupby(["Producer", "LOB_Category"])["Count"].sum().reset_index()
-    fig_prod = px.bar(
-        grouped_producer,
-        x="Producer",
-        y="Count",
-        color="LOB_Category",
-        barmode="group",
-        title="Policies per Producer by LOB"
-    )
-    st.plotly_chart(fig_prod)
+    st.subheader("Detailed Opportunities by Producer")
     st.dataframe(grouped_producer)
 else:
     st.info("No producer data available for the selected date range.")
-
-
 
 # Optionally, show raw data.
 if st.sidebar.checkbox("Show Raw Data"):
